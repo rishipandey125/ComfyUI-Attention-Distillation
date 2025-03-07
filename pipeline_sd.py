@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from accelerate import Accelerator
 from diffusers import StableDiffusionPipeline
 from diffusers.image_processor import PipelineImageInput
-from .losses import ad_loss, q_loss
+from .losses import ad_loss, q_loss, qk_loss, qkv_loss
 from .utils import DataCache, register_attn_control, adain
 from tqdm import tqdm
 
@@ -243,7 +243,8 @@ class ADPipeline(StableDiffusionPipeline):
         attn_scale=1.0,
         lr=0.05,
         iters=1,
-        weight=0,
+        content_weight=0,
+        style_weight=0,
         width=512,
         height=512,
         batch_size=1,
@@ -317,7 +318,7 @@ class ADPipeline(StableDiffusionPipeline):
                     content_loss = q_loss(q_list, qc_list)
                     # content_loss = qk_loss(q_list, k_list, qc_list, kc_list)
                     # content_loss = qkv_loss(q_list, k_list, vc_list, c_out_list)
-                loss = style_loss + content_loss * weight
+                loss =(style_loss * style_weight) + (content_loss * content_weight)
                 self.accelerator.backward(loss)
                 optimizer.step()
                 pbar.set_postfix(loss=loss.item(), time=t.item(), iter=j)

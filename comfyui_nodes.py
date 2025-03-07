@@ -1,5 +1,6 @@
 import os
 import torch
+import numpy as np
 from PIL import Image
 from diffusers import DDIMScheduler
 
@@ -10,12 +11,11 @@ import folder_paths
 from huggingface_hub import hf_hub_download
 from tqdm import tqdm
 
-from torchvision.transforms.functional import resize, to_tensor
+from torchvision.transforms.functional import resize, to_tensor, to_pil_image
 from accelerate.utils import set_seed
 from .pipeline_sd import ADPipeline
 from .pipeline_sdxl import ADPipeline as ADXLPipeline
 from .utils import Controller
-
 
 class PureText:
     @classmethod
@@ -54,6 +54,27 @@ class LoadPILImage:
         img = node_helpers.pillow(Image.open, image_path).convert('RGB')
         return (img,)
 
+
+class ConvertToPIL:
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("image",)
+    FUNCTION = "tensor_to_pil"
+
+    CATEGORY = "AttentionDistillationWrapper"
+    
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            },
+        }
+
+    def tensor_to_pil(self, image):
+        image = image.cpu().numpy().squeeze()
+        image = np.clip(255. * image, 0, 255).astype(np.uint8)
+        pil_img = Image.fromarray(image)
+        return (pil_img,)
 
 class ResizeImage:
     RETURN_TYPES = ("IMAGE",)
@@ -157,6 +178,7 @@ class ADOptimizer:
                 "style": ("IMAGE",),
                 "steps": ("INT", {"default": 200, "min": 1, "max": 500, "step": 1}),
                 "content_weight": ("FLOAT", {"default": 0.25, "min": 0., "max": 10., "step": 0.001}),
+                "style_weight": ("FLOAT", {"default": 0.25, "min": 0., "max": 10., "step": 0.001}),
                 "lr": ("FLOAT", {"default": 0.05, "min": 0.001, "max": 0.5, "step": 0.001}),
                 "height": ("INT", {"default": 512, "min": 256, "max": 4096, "step": 8}),
                 "width": ("INT", {"default": 512, "min": 256, "max": 4096, "step": 8}),
@@ -169,7 +191,7 @@ class ADOptimizer:
     CATEGORY = "AttentionDistillationWrapper"
 
     @torch.inference_mode(False)
-    def process(self, distiller, content, style, steps, content_weight, lr, height, width, seed):
+    def process(self, distiller, content, style, steps, content_weight, style_weight, lr, height, width, seed):
         precision = distiller['precision']
         attn_distiller = distiller['distiller']
 
@@ -185,7 +207,8 @@ class ADOptimizer:
             iters=1,
             width=width,
             height=height,
-            weight=content_weight,
+            content_weight=content_weight,
+            style_weight=style_weight,
             controller=controller,
             style_image=style,
             content_image=content,
@@ -258,6 +281,7 @@ NODE_CLASS_MAPPINGS = {
     "LoadPILImage": LoadPILImage,
     "PureText": PureText,
     "ResizeImage": ResizeImage,
+    "ConvertToPIL": ConvertToPIL,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -268,4 +292,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "LoadPILImage": "Load PIL Image",
     "PureText": "Text Prompt",
     "ResizeImage": "Resize Image",
+    "ConvertToPIL": "Convert To PIL",
 }
