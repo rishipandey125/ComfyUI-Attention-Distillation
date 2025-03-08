@@ -180,6 +180,7 @@ class ADOptimizer:
                 "content_weight": ("FLOAT", {"default": 0.25, "min": 0., "max": 10., "step": 0.001}),
                 "style_weight": ("FLOAT", {"default": 0.25, "min": 0., "max": 10., "step": 0.001}),
                 "lr": ("FLOAT", {"default": 0.05, "min": 0.001, "max": 0.5, "step": 0.001}),
+                "self_layers": ("STRING", {"default": "10,11,12,13,14,15",}),
                 "height": ("INT", {"default": 512, "min": 256, "max": 4096, "step": 8}),
                 "width": ("INT", {"default": 512, "min": 256, "max": 4096, "step": 8}),
                 "seed": ("INT", {"default": 2025, "min": 0, "max": 0xffffffffffffffff, "step": 1}),
@@ -191,14 +192,15 @@ class ADOptimizer:
     CATEGORY = "AttentionDistillationWrapper"
 
     @torch.inference_mode(False)
-    def process(self, distiller, content, style, steps, content_weight, style_weight, lr, height, width, seed):
+    def process(self, distiller, content, style, steps, content_weight, style_weight, lr, self_layers, height, width, seed):
         precision = distiller['precision']
         attn_distiller = distiller['distiller']
 
         style = to_tensor(resize(style, (512, 512))).unsqueeze(0)
         content = to_tensor(content).unsqueeze(0)
 
-        controller = Controller(self_layers=(10, 16))
+        self_layers_tup = tuple(map(int, self_layers.split(",")))
+        controller = Controller(self_layers=self_layers_tup)
         set_seed(seed)
 
         images = attn_distiller.optimize(

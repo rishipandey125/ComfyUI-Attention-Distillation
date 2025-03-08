@@ -76,6 +76,7 @@ def register_attn_control(unet, controller, cache=None):
                 q, k, v, attn_mask=attention_mask, dropout_p=0.0, is_causal=False
             )
             if is_self and controller.cur_self_layer in controller.self_layers:
+                #here you cache it depending on what block you are at
                 cache.add(q, k, v, hidden_states)
 
             hidden_states = hidden_states.transpose(1, 2).reshape(
@@ -150,7 +151,7 @@ class Controller:
     def __init__(self, self_layers=(0, 16)):
         self.num_self_layers = -1
         self.cur_self_layer = 0
-        self.self_layers = list(range(*self_layers))
+        self.self_layers = list(self_layers)
 
 
 class DataCache:

@@ -88,6 +88,7 @@ class ADPipeline(StableDiffusionPipeline):
         clip_skip: Optional[int] = None,
         **kwargs,
     ):
+        print("SAMPLE FUNCTION RUNNING")
         # 0. Default height and width to unet
         height = height or self.unet.config.sample_size * self.vae_scale_factor
         width = width or self.unet.config.sample_size * self.vae_scale_factor
@@ -257,6 +258,7 @@ class ADPipeline(StableDiffusionPipeline):
         source_mask=None,
         target_mask=None,
     ):
+        print("OPTIMIZE FUNCTION CALLED")
         height = height // self.vae_scale_factor
         width = width // self.vae_scale_factor
 
@@ -274,6 +276,8 @@ class ADPipeline(StableDiffusionPipeline):
         if content_image is not None:
             content_latent = self.image2latent(content_image)
             latents = torch.cat([content_latent.clone()] * batch_size)
+            # zero_tensor = torch.zeros_like(content_latent)  # New tensor with the same shape but all zeros
+
             null_embeds_for_content = null_embeds.repeat(content_latent.shape[0], 1, 1)
 
         self.cache = DataCache()
@@ -305,6 +309,7 @@ class ADPipeline(StableDiffusionPipeline):
                         null_embeds_for_content,
                     )
             for j in range(iters):
+                #iters is 1 whcih is different than steps
                 style_loss = 0
                 content_loss = 0
                 optimizer.zero_grad()
@@ -318,10 +323,16 @@ class ADPipeline(StableDiffusionPipeline):
                     content_loss = q_loss(q_list, qc_list)
                     # content_loss = qk_loss(q_list, k_list, qc_list, kc_list)
                     # content_loss = qkv_loss(q_list, k_list, vc_list, c_out_list)
-                loss =(style_loss * style_weight) + (content_loss * content_weight)
+                # if progress > 0.05:
+                #     print("applying style loss")
+                progress = i / num_inference_steps
+                loss = content_loss * content_weight
+                if progress > 0.8:
+                    loss = (style_loss * style_weight) + (content_loss * content_weight)
                 self.accelerator.backward(loss)
                 optimizer.step()
                 pbar.set_postfix(loss=loss.item(), time=t.item(), iter=j)
+                print(i)
         images = self.latent2image(latents)
         # Offload all models
         self.maybe_free_model_hooks()
@@ -358,7 +369,7 @@ class ADPipeline(StableDiffusionPipeline):
         clip_skip: Optional[int] = None,
         **kwargs,
     ):
-
+        print("PANORAMA FUNCTION CALLED")
         # 0. Default height and width to unet
         height = height or self.unet.config.sample_size * self.vae_scale_factor
         width = width or self.unet.config.sample_size * self.vae_scale_factor
@@ -579,6 +590,7 @@ class ADPipeline(StableDiffusionPipeline):
         return images
 
     def AD(self, latents, t, lr, iters, pbar, weight=0):
+        print("AD FUNCTION CALLED")
         t = max(
             t
             - self.scheduler.config.num_train_timesteps
